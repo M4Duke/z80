@@ -4,6 +4,7 @@
 		
 		org	0x8000
 		nolist
+		
 km_read_char	equ	0xBB09
 km_wait_key		equ	0xBB18
 txt_output		equ 0xBB5A
@@ -22,18 +23,18 @@ kl_rom_restore	equ 0xB90C
 mc_wait_flyback	equ	0xBD19
 kl_rom_select	equ 0xB90F
 
-		ld		a,2			
+		ld a,2			
 		call	scr_reset		; set mode 2
-		xor		a
-		ld		b,a
+		xor a
+		ld b,a
 		call	scr_set_border
-		xor		a
-		ld		b,0
-		ld		c,0
+		xor a
+		ld b,0
+		ld c,0
 		call	scr_set_ink
-		ld		a,1
-		ld		b,26
-		ld		c,26
+		ld a,1
+		ld b,26
+		ld c,26
 		call	scr_set_ink
 
 main:		
@@ -82,7 +83,7 @@ pb_ram_read_not_ok:
 		
 pb_ram_read_ok:
 		ld	a,0x55
-		call back_check_pagebank			; quick check to see if there was a duplicate bank
+		call back_check_pagebank		; quick check to see if there was a duplicate bank
 		cp	0xC4
 		jr	z, pb_ram_read_ok1
 		push hl
@@ -92,7 +93,7 @@ pb_ram_read_ok:
 		pop	hl
 		jr	pb_next_bank
 pb_ram_read_ok1:
-		out	(c),c				; back to main bank
+		out	(c),c				; back to base memory
 		ld	a,(hl)				; check no writethrough occurred.
 		cp	0xCC
 		jr	z, pb_ram_bank_ok
@@ -118,13 +119,13 @@ pb_next_bank:
 pb_next_page:
 		ld	a,0b111000			; keep page
 		and d
-		cp  0b111000
-		jr	z, done512
-		ld	a,0b1000
-		add	d					; increase page
-		and	0b11111100			; reset bank to 0
-		ld	d,a
-		jp	pb_ram_loop
+		cp 0b111000
+		jr z, done512
+		ld a,0b1000
+		add d					; increase page
+		and 0b11111100			; reset bank to 0
+		ld d,a
+		jp pb_ram_loop
 
 done512:
 		
@@ -165,11 +166,8 @@ stage2:
 		call wrt
 		ld	hl,txt_test2
 		call wrt
-		ld a,5
-		ld (row+1),a
-		ld a,1
-		ld (column+1),a
-		
+		call crlf
+		call crlf
 		
 		; C1 mode test 
 		; make sure upperrom is not mapped
@@ -180,27 +178,25 @@ stage2:
 		ld	bc,0x7FC0
 		out (c),c
 		ld	(hl),0xCC			; main ram check byte
-		ld	e,0					; counter for amount of valid blocks
-		ld	d,0xC1				; start page 0
+		ld	e,0				; counter for amount of valid blocks
+		ld	d,0xC1			; start page 0
 p_ram_loop:
 		
-		call set_txt_pos
+		call crlf
 		
 		call disp_ram_page
 		out (c),d				; switch in new page
 
 		; check all even and odd bits
 		
-		
 		ld a,0xAA
 		ld hl,0xC000
 		call checkbank
-		
 		jr nz, p_ram_read_not_ok
+
 		ld a,0x55
 		ld hl,0xC000
 		call checkbank
-		
 		jr	z, p_ram_read_ok
 p_ram_read_not_ok:
 	
@@ -212,7 +208,7 @@ p_ram_read_not_ok:
 		
 p_ram_read_ok:
 		ld	a,0x55
-		call back_check_page			; quick check to see if there was a duplicate page
+		call back_check_page		; quick check to see if there was a duplicate page
 		cp	0xC1
 		jr	z, p_ram_read_ok1
 		push hl
@@ -222,7 +218,7 @@ p_ram_read_ok:
 		pop	hl
 		jr	p_next_page
 p_ram_read_ok1:
-		out	(c),c				; back to main bank
+		out	(c),c				; back to base memory
 		ld	a,(hl)				; check no writethrough occurred.
 		cp	0xCC
 		jr	z, p_ram_page_ok
@@ -303,7 +299,6 @@ stage3:
 		
 c3_ram_loop:
 		
-		;;call set_txt_pos
 		call crlf
 		call disp_ram_page
 		out (c),d				; switch in new page
@@ -343,10 +338,10 @@ c3_ram_read_ok:
 		pop	hl
 		jr	c3_next_page
 c3_ram_read_ok1:
-		ld	a,(0x4000)
+		ld	a,(0x4000)			; this is base memory 0xC000 in non C3 mode
 		cp	0xCC
 		jr	z, c3_base_bank3_ok
-		out	(c),c				; back to main bank
+		out	(c),c				; back to base memory
 		push hl
 		ld	hl,txt_fail_c3_bank
 		call wrt
@@ -354,34 +349,34 @@ c3_ram_read_ok1:
 	
 		
 c3_base_bank3_ok:
-		out	(c),c				; back to main bank
-		ld	a,(hl)				; check no writethrough occurred.
+		out	(c),c				; back to base memory
+		ld	a,(hl)				; check no writethrough occurred to base mem 0xC000.
 		cp	0xCC
 		jr	z, c3_ram_page_ok
 		push hl
 		ld	hl,txt_fail_write
 		call wrt
 		pop	hl
-		ld	(hl),0xCC
+		ld	(hl),0xCC				; make sure it is 0xCC now, for next page
 		jr	c3_next_page
 c3_ram_page_ok:
 		di
-		out (c),d
+		out (c),d				; re-enter C3 mode with whatever page
 		ld bc,0xDF00
-		out (c),c			; select upper rom 0
-		ld bc,0x7F86		; enable upper rom
+		out (c),c				; select upper rom 0
+		ld bc,0x7F86			; enable upper rom 
 		out (c),c
-		ld a,(0x4000)
-		ld e,a				; is it mapped to 0x4000 too ?
-		ld a,(0xC000)
+		ld a,(0x4000)			; again this is base mem 0xC000 (this value should still be 0xCC) if remapped / shadowed
+		ld e,a				; check val later
+		ld a,(0xC000)			; here we should read first byte of ROM 0 (basic) which is 0x80
 		out (c),c
-		ld bc,0x7F8E		; disable upper rom
+		ld bc,0x7F8E			; disable upper rom, C3 mode now has priority again at 0xC000
 		out (c),c
 		
 		ld bc,0x7FC0
-		out (c),c
+		out (c),c				; no extended mem mode
 		ei
-		cp 0x80
+		cp 0x80				; ROM value
 		jr z, c3_rom_map_ok
 		push hl
 		ld	hl,txt_fail_rom
@@ -389,11 +384,11 @@ c3_ram_page_ok:
 		pop	hl
 		jr	c3_next_page
 c3_rom_map_ok:
-		ld a,e
+		ld a,e				; now check if base mem remapped to 0x4000 is valid
 		cp 0xCC
 		jr z, c3_rom_map_ok2
 		push hl
-		ld	hl,txt_fail_rom2
+		ld	hl,txt_fail_rom2	; this could be that ROM is mapped at 0x4000 too or base mem was not mapped
 		call wrt
 		pop	hl
 		jr	c3_next_page
@@ -408,15 +403,15 @@ c3_next_page:
 		ld	a,0b111000			; keep page
 		and d
 		cp  0b111000
-		jr	z, donec3512
+		jr	z, done_c3_512
 		ld	a,0b1000
 		add	d					; increase page
 		ld	d,a
 		jp	c3_ram_loop
 		
-donec3512:
+done_c3_512:
 		
-		
+		; the end
 endl:
 		jr		endl
 		
